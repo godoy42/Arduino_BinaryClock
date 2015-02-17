@@ -21,7 +21,7 @@ byte ledBitCheck = 0;
 int currentSecond = 0;
 int currentMinute = 0;
 int currentHour = 1;
-const int loopDelay = 1000;
+const int loopDelay = 100;
 const int loopMax = 1000 / loopDelay;
 int loopCurrent = 0;
 
@@ -51,91 +51,52 @@ void loop() {
   leds2 = 0;
   updateShiftRegister();
   
-  if(mode == 0 || mode == 8) {
-    if(mode == 0) {
+  loopCurrent++;
+  if(loopCurrent == loopMax) {
+    loopCurrent = 0;
+    blinkTime = !blinkTime;
+    
+    digitalWrite(controlLed, LOW);
+    if(mode == 0)
+      currentSecond ++;
+    else if(!blinkTime)
+      digitalWrite(controlLed, HIGH);
+    
+    checkTime();
+    
+    if(buttonPressed){
+      Serial.println("button is pressed for " + String(secondsPressed) + " seconds. ");
+      secondsPressed++;
+    
+      if(secondsPressed == secondsToEnterConfig)
+        changeMode();
     }
-    
-    setCurrentTime();
-    updateLeds();
-    
-  } else {
-    leds = 0;
-    for (int i = 1; i < mode; i++) {
-      Serial.println("Turning the first leds ON. " + String(i) + "; " + String(mode) + "; " + String(currentSecond));
-      ledBitCheck = 0;
-      bitSet(ledBitCheck, i);
-      
-      if((ledBitCheck & currentSecond) > 0){
-        bitSet(leds, i);
-      }
-      updateShiftRegister();
-    }
-    if(blinkTime)
-      bitSet(leds, mode - 1);
-    
-    updateShiftRegister();
-    
   }
-  delay(1000);               // wait for a second
+  updateLeds();
+
+  delay(loopDelay);
   
   if (digitalRead(buttonPin) == LOW) {
     //button is pressed
     if(!buttonPressed){
       secondsPressed = 0;
       loopCurrent = 0;
-      Serial.println("button is pressed first time\n");
-      
-      if(mode > 0) {
-        currentBit = !currentBit;
-        digitalWrite(controlLed, LOW);
-        
-        if(currentBit) {
-          Serial.println("Ligando o led");
-          digitalWrite(controlLed, HIGH);
-          bitSet(currentSecond, mode - 1);
-        } else {
-          bitClear(currentSecond, mode - 1);
-        }
-      }
+      Serial.println("button is pressed first time");
     }
       
     buttonPressed = true;
   } else {
-    if(buttonPressed) {
-      Serial.println("Not pressed anymore\n");
-    }
+    if(buttonPressed && (secondsPressed < secondsToEnterConfig)) 
+      if(mode == 1)
+        currentMinute++;
+      else
+        currentHour++;
+    
+    if(buttonPressed)
+      Serial.println("button was released.");
     
     buttonPressed = false;
   }
-  
-  if(mode > 0) {
-    loopCurrent++;
-    if(loopCurrent == loopMax) {
-      loopCurrent = 0;
-      blinkTime = !blinkTime;
-      
-      if(buttonPressed) {
-        secondsPressed++;
-        Serial.println(" " + String(secondsPressed) + " seconds");
-
-        if(secondsPressed == 3) {
-          changeMode();
-        }
-      } else {
-        Serial.println("Still alive");
-      }
-    }
-  } else {
-      if(buttonPressed) {
-        secondsPressed++;
-        Serial.println(" " + String(secondsPressed) + " seconds");
-
-        if(secondsPressed == secondsToEnterConfig) {
-          changeMode();
-        }
-      }
-  }
-  
 }
 
 void updateShiftRegister()
@@ -150,18 +111,10 @@ void changeMode()
 {
   Serial.println("And this is the end for the mode " + String(mode));
   mode++;
-  if(mode > 0) {
-    currentBit = (bitRead(currentSecond, mode - 1) == 1);
-  }
-  
-  if(mode == 9) 
+  if(mode == 3) 
     mode = 0;
 }
 
-void setCurrentTime() {
-  currentSecond ++;
-  checkTime();
-}
 void checkTime() {
   if(currentSecond == 60){
     currentSecond = 0;
@@ -187,21 +140,21 @@ void updateLeds()
     bitSet(ledBitCheck, i);
     
     //First, the seconds. First 6 digits of the first register
-    if((ledBitCheck & currentSecond) > 0){
+    if((ledBitCheck & currentSecond) > 0)
       bitSet(leds, secondsPins[i]);
-    }
+    
     //Now the minutes. First 6 digits of the second register.
-    if((ledBitCheck & currentMinute) > 0 ){
-      bitSet(leds2, minutesPins[i]);
-    }
+    if((ledBitCheck & currentMinute) > 0 )
+      if((mode == 0) || ((mode == 1) && blinkTime)) 
+        bitSet(leds2, minutesPins[i]);
+        
     //And now the hour. Last 2 digits of each registers.
-    if(((ledBitCheck & currentHour) > 0)){
-      if(i < 2) {
-        bitSet(leds, hoursPins[i]);
-      } else { 
-        bitSet(leds2, hoursPins[i]); 
-      }
-    }
+    if(((ledBitCheck & currentHour) > 0))
+      if((mode == 0) || ((mode == 2) && blinkTime)) 
+        if(i < 2)
+            bitSet(leds, hoursPins[i]);
+        else
+            bitSet(leds2, hoursPins[i]);
   }
   
   updateShiftRegister();
