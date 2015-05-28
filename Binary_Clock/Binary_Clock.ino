@@ -13,13 +13,14 @@ int secondsPressed = 0;
 const int secondsToEnterConfig = 5;
 boolean buttonPressed = false;
 boolean blinkTime = false;
+boolean controlLedBlink = false;
 boolean currentBit = false;
  
 byte leds = 0;
 byte leds2 = 0;
 byte ledBitCheck = 0;
 int currentSecond = 0;
-int currentMinute = 0;
+int currentMinute = 1;
 int currentHour = 1;
 const int loopDelay = 100;
 const int loopMax = 1000 / loopDelay;
@@ -27,8 +28,8 @@ int loopCurrent = 0;
 
 // the setup routine runs once when you press reset:
 void setup() {
+  Serial.begin(57600);
   Serial.println("Starting.");
-  Serial.println("Secondary loop (mode>0) each " + String(loopMax) + " loops. ");
   
   // initialize the digital pin as an output.
   pinMode(controlLed, OUTPUT);
@@ -47,20 +48,20 @@ void loopblink() {
 
 // the loop routine runs over and over again forever:
 void loop() {
-  leds = 0;
-  leds2 = 0;
-  updateShiftRegister();
-  
   loopCurrent++;
+  digitalWrite(controlLed, LOW);
+  
+  if(mode > 0) {
+    controlLedBlink = !controlLedBlink;
+    if(controlLedBlink)
+      digitalWrite(controlLed, HIGH);
+  }
   if(loopCurrent == loopMax) {
     loopCurrent = 0;
     blinkTime = !blinkTime;
     
-    digitalWrite(controlLed, LOW);
     if(mode == 0)
       currentSecond ++;
-    else if(!blinkTime)
-      digitalWrite(controlLed, HIGH);
     
     checkTime();
     
@@ -92,19 +93,13 @@ void loop() {
       else
         currentHour++;
     
+    checkTime();
+    
     if(buttonPressed)
       Serial.println("button was released.");
     
     buttonPressed = false;
   }
-}
-
-void updateShiftRegister()
-{
-  digitalWrite(latchPin, LOW);
-  shiftOut(dataPin, clockPin, MSBFIRST, leds2);
-  shiftOut(dataPin, clockPin, MSBFIRST, leds);
-  digitalWrite(latchPin, HIGH);
 }
 
 void changeMode()
@@ -124,13 +119,15 @@ void checkTime() {
     currentMinute = 0;
     currentHour ++;
   }
-  if(currentHour == 13){
-    currentHour = 0;
+  if(currentHour > 12){
+    currentHour = 1;
   }
 }
 
 void updateLeds()
 {
+  leds = 0;
+  leds2 = 0;
   int secondsPins[] = {0, 1, 2, 3, 4, 5};
   int minutesPins[] = {0, 1, 2, 3, 4, 5};
   int hoursPins[] = {6, 7, 6, 7};
@@ -140,8 +137,9 @@ void updateLeds()
     bitSet(ledBitCheck, i);
     
     //First, the seconds. First 6 digits of the first register
-    if((ledBitCheck & currentSecond) > 0)
+    if((ledBitCheck & currentSecond) > 0) {
       bitSet(leds, secondsPins[i]);
+    }
     
     //Now the minutes. First 6 digits of the second register.
     if((ledBitCheck & currentMinute) > 0 )
@@ -149,13 +147,25 @@ void updateLeds()
         bitSet(leds2, minutesPins[i]);
         
     //And now the hour. Last 2 digits of each registers.
-    if(((ledBitCheck & currentHour) > 0))
-      if((mode == 0) || ((mode == 2) && blinkTime)) 
+    if(((ledBitCheck & currentHour) > 0)){
+      if((mode == 0) || ((mode == 2) && blinkTime)){ 
         if(i < 2)
             bitSet(leds, hoursPins[i]);
         else
             bitSet(leds2, hoursPins[i]);
+      }
+    }
   }
   
   updateShiftRegister();
 }
+
+void updateShiftRegister()
+{
+  digitalWrite(latchPin, LOW);
+  shiftOut(dataPin, clockPin, MSBFIRST, leds2);
+  shiftOut(dataPin, clockPin, MSBFIRST, leds);
+  digitalWrite(latchPin, HIGH);
+}
+
+
